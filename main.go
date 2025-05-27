@@ -17,10 +17,8 @@ import (
 )
 
 func main() {
-	// Carrega variáveis de ambiente
-	if err := godotenv.Load(); err != nil {
-		log.Fatal("Erro ao carregar arquivo .env")
-	}
+	// Tenta carregar o arquivo .env, mas não falha se não existir
+	_ = godotenv.Load()
 
 	// Configuração do banco de dados
 	dsn := "host=" + os.Getenv("DB_HOST") +
