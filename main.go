@@ -36,7 +36,14 @@ func main() {
 	}
 
 	// Migra as tabelas
-	db.AutoMigrate(&models.Job{}, &models.Candidate{}, &models.Admin{})
+	err = db.AutoMigrate(
+		&models.Job{},
+		&models.Candidate{},
+		&models.Admin{},
+	)
+	if err != nil {
+		log.Fatal("Erro ao migrar tabelas:", err)
+	}
 
 	// Inicializa o router
 	r := gin.Default()

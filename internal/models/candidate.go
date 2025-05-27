@@ -12,5 +12,5 @@ type Candidate struct {
 	Resume     string `json:"resume" validate:"required,min=10"`
 	Experience string `json:"experience" validate:"required,min=10"`
 	Education  string `json:"education" validate:"required,min=10"`
-	Jobs       []Job  `json:"jobs" gorm:"many2many:job_candidates;uniqueIndex:idx_candidate_job"`
+	Jobs       []Job  `json:"jobs" gorm:"many2many:job_candidates;"`
 }
