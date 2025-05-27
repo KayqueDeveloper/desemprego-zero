@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -16,21 +17,47 @@ import (
 	"gorm.io/gorm"
 )
 
+func validateEnvVars() error {
+	requiredVars := []string{
+		"DB_HOST",
+		"DB_PORT",
+		"DB_USER",
+		"DB_PASSWORD",
+		"DB_NAME",
+		"JWT_SECRET",
+	}
+
+	for _, v := range requiredVars {
+		if os.Getenv(v) == "" {
+			return fmt.Errorf("variável de ambiente %s não está definida", v)
+		}
+	}
+
+	return nil
+}
+
 func main() {
 	// Tenta carregar o arquivo .env, mas não falha se não existir
 	_ = godotenv.Load()
 
+	// Valida variáveis de ambiente
+	if err := validateEnvVars(); err != nil {
+		log.Fatalf("Erro nas variáveis de ambiente: %v", err)
+	}
+
 	// Configuração do banco de dados
-	dsn := "host=" + os.Getenv("DB_HOST") +
-		" user=" + os.Getenv("DB_USER") +
-		" password=" + os.Getenv("DB_PASSWORD") +
-		" dbname=" + os.Getenv("DB_NAME") +
-		" port=" + os.Getenv("DB_PORT") +
-		" sslmode=disable"
+	dsn := fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		os.Getenv("DB_HOST"),
+		os.Getenv("DB_PORT"),
+		os.Getenv("DB_USER"),
+		os.Getenv("DB_PASSWORD"),
+		os.Getenv("DB_NAME"),
+	)
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		log.Fatal("Erro ao conectar ao banco de dados:", err)
+		log.Fatalf("Erro ao conectar ao banco de dados: %v", err)
 	}
 
 	// Migra as tabelas
@@ -40,7 +67,7 @@ func main() {
 		&models.Admin{},
 	)
 	if err != nil {
-		log.Fatal("Erro ao migrar tabelas:", err)
+		log.Fatalf("Erro ao migrar tabelas: %v", err)
 	}
 
 	// Inicializa o router
