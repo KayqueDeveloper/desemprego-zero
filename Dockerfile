@@ -29,7 +29,6 @@ RUN apk --no-cache add ca-certificates
 
 # Copia o binário compilado
 COPY --from=builder /app/main .
-COPY --from=builder /app/.env .
 
 # Expõe a porta da aplicação
 EXPOSE 8080
