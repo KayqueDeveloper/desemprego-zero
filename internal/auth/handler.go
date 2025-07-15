@@ -23,7 +23,8 @@ func NewHandler(db *gorm.DB) *Handler {
 }
 
 type LoginRequest struct {
-	Username string `json:"username" validate:"required,min=3,max=50"`
+	Email    string `json:"email"`
+	Username string `json:"username"`
 	Password string `json:"password" validate:"required,min=6"`
 }
 
@@ -42,7 +43,7 @@ func (h *Handler) Login(c *gin.Context) {
 	}
 
 	var admin models.Admin
-	if err := h.db.Where("username = ?", req.Username).First(&admin).Error; err != nil {
+	if err := h.db.Where("username = ?", req.Username).Or("email = ?", req.Email).First(&admin).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Credenciais inválidas"})
 		return
 	}
