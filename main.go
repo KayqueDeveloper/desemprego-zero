@@ -4,13 +4,16 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"desemprego-zero/internal/auth"
 	"desemprego-zero/internal/candidate"
 	"desemprego-zero/internal/job"
 	"desemprego-zero/internal/middleware"
+
 	"desemprego-zero/internal/models"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
@@ -72,6 +75,19 @@ func main() {
 
 	// Inicializa o router
 	r := gin.Default()
+
+	config := cors.DefaultConfig()
+	allowedOrigin := os.Getenv("CORS_ORIGIN")
+	if allowedOrigin == "" {
+		allowedOrigin = "http://localhost:3000"
+	}
+	config.AllowOrigins = []string{allowedOrigin, "https://desemprego-zero", "http://localhost*"}
+	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
+	config.AllowCredentials = true
+	config.MaxAge = 12 * time.Hour
+
+	r.Use(cors.New(config))
 
 	// Middleware de tratamento de erros
 	r.Use(middleware.ErrorHandler())
