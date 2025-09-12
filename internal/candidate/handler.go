@@ -1,12 +1,13 @@
 package candidate
 
 import (
-	"net/http"
-
 	"desemprego-zero/internal/models"
 	"desemprego-zero/internal/validator"
+	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -18,77 +19,96 @@ func NewHandler(db *gorm.DB) *Handler {
 	return &Handler{db: db}
 }
 
-// CreateCandidate permite que um candidato se inscreva em uma vaga
+// CreateCandidate cadastra um novo candidato com upload de currículo
 func (h *Handler) CreateCandidate(c *gin.Context) {
 	var candidate models.Candidate
-	if err := c.ShouldBindJSON(&candidate); err != nil {
-		c.JSON(http.StatusBadRequest, validator.ErroValidacaoParaResponse(err))
+
+	// Parse multipart form
+	if err := c.Request.ParseMultipartForm(10 << 20); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Erro ao processar formulário"})
 		return
 	}
 
-	// Valida a estrutura
+	candidate.Name = c.PostForm("name")
+	candidate.Email = c.PostForm("email")
+	candidate.Password = c.PostForm("password")
+	candidate.Phone = c.PostForm("phone")
+	candidate.City = c.PostForm("city")
+	candidate.Status = models.CandidateStatus(c.PostForm("status"))
+	candidate.Area = models.Area(c.PostForm("area"))
+	candidate.Experience = c.PostForm("experience")
+
+	// Validação
 	if err := validator.ValidaStruct(candidate); err != nil {
 		c.JSON(http.StatusBadRequest, validator.ErroValidacaoParaResponse(err))
 		return
 	}
 
-	// Valida o email
 	if !validator.ValidaEmail(candidate.Email) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Email inválido"})
 		return
 	}
 
-	// Valida o telefone
-	if !validator.ValidaTelefone(candidate.Phone) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Telefone inválido. Use o formato (99) 99999-9999"})
+	//	if !validator.ValidaTelefone(candidate.Phone) {
+	//		c.JSON(http.StatusBadRequest, gin.H{"error": "Telefone inválido. Use o formato (99) 99999-9999"})
+	//		return
+	//	}
+
+	// Hash da senha
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(candidate.Password), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao processar senha"})
+		return
+	}
+	candidate.Password = string(hashedPassword)
+
+	// // Upload do currículo
+	// file, header, err := c.Request.FormFile("resume")
+	// if err == nil {
+	// 	defer file.Close()
+	// 	filename := filepath.Base(header.Filename)
+	// 	resumePath := filepath.Join("uploads", "resumes", filename)
+	// 	os.MkdirAll(filepath.Dir(resumePath), 0755)
+	// 	out, err := os.Create(resumePath)
+	// 	if err != nil {
+	// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao salvar currículo"})
+	// 		return
+	// 	}
+	// 	defer out.Close()
+	// 	_, err = out.ReadFrom(file)
+	// 	if err != nil {
+	// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao gravar currículo"})
+	// 		return
+	// 	}
+	// 	candidate.Resume = resumePath
+	// }
+
+	if err := h.db.Create(&candidate).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao cadastrar candidato"})
 		return
 	}
 
-	// Verifica se a vaga existe
-	var job models.Job
-	if err := h.db.First(&job, candidate.Jobs[0].ID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Vaga não encontrada"})
-		return
-	}
-
-	// Verifica se o candidato já se inscreveu nesta vaga
-	var existingCandidate models.Candidate
-	result := h.db.Where("email = ? AND jobs.id = ?", candidate.Email, job.ID).
-		Joins("JOIN job_candidates ON job_candidates.candidate_id = candidates.id").
-		Joins("JOIN jobs ON jobs.id = job_candidates.job_id").
-		First(&existingCandidate)
-
-	if result.Error == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Você já se inscreveu nesta vaga"})
-		return
-	}
-
-	// Cria o candidato e associa à vaga
-	tx := h.db.Begin()
-	if err := tx.Create(&candidate).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao criar candidato"})
-		return
-	}
-
-	if err := tx.Model(&candidate).Association("Jobs").Append(&job); err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao associar candidato à vaga"})
-		return
-	}
-
-	tx.Commit()
-	c.JSON(http.StatusCreated, candidate)
+	c.JSON(http.StatusCreated, gin.H{"id": candidate.ID, "name": candidate.Name})
 }
 
-// ListCandidates lista todos os candidatos (rota protegida)
+// ListCandidates lista candidatos com filtros por área, status e nome
 func (h *Handler) ListCandidates(c *gin.Context) {
 	var candidates []models.Candidate
-	result := h.db.Preload("Jobs").Find(&candidates)
-	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao buscar candidatos"})
-		return
+	area := c.Query("area")
+	status := c.Query("status")
+	name := c.Query("name")
+
+	dbQuery := h.db.Model(&models.Candidate{})
+	if area != "" {
+		dbQuery = dbQuery.Where("area = ?", area)
 	}
+	if status != "" {
+		dbQuery = dbQuery.Where("status = ?", status)
+	}
+	if name != "" {
+		dbQuery = dbQuery.Where("LOWER(name) LIKE ?", "%"+strings.ToLower(name)+"%")
+	}
+	dbQuery = dbQuery.Preload("Jobs").Find(&candidates)
 
 	c.JSON(http.StatusOK, candidates)
 }

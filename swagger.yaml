@@ -1,0 +1,365 @@
+openapi: 3.0.3
+info:
+  title: API Desemprego Zero
+  description: API para gestão de vagas, candidatos, empresas parceiras e dashboard.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+paths:
+  /admin/login:
+    post:
+      summary: Login unificado (admin, candidato, empresa)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            example:
+              email: admin@admin.com
+              password: senha123
+      responses:
+        "200":
+          description: Login realizado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Credenciais inválidas
+  /candidates:
+    post:
+      summary: Cadastro de candidato
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/CandidateRequest"
+            example:
+              name: Fulano da Silva
+              email: fulano@email.com
+              password: senha123
+              phone: "(11) 99999-9999"
+              city: São Paulo
+              status: empregado
+              area: TI
+              experience: "5 anos em desenvolvimento"
+              resume: "(arquivo PDF)"
+      responses:
+        "201":
+          description: Candidato cadastrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+    get:
+      summary: Listagem de candidatos
+      parameters:
+        - in: query
+          name: area
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: name
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista de candidatos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CandidateResponse"
+  /partners:
+    post:
+      summary: Cadastro de empresa parceira
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartnerRequest"
+            example:
+              name: Empresa X
+              description: "Empresa de tecnologia"
+              city: São Paulo
+              email: empresa@email.com
+              area: TI
+              password: senha123
+      responses:
+        "201":
+          description: Empresa cadastrada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+    get:
+      summary: Listagem de empresas parceiras
+      responses:
+        "200":
+          description: Lista de empresas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PartnerListResponse"
+  /jobs:
+    post:
+      summary: Cadastro de vaga
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobRequest"
+            example:
+              title: Desenvolvedor Go
+              partner_id: 1
+              location: São Paulo
+              salary: 8000
+              type: Full-time
+              deadline: 2024-12-31T23:59:59Z
+              description: "Desenvolvimento de APIs em Go"
+              requirements: "Experiência com Go, REST, GORM"
+      responses:
+        "201":
+          description: Vaga cadastrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobResponse"
+    get:
+      summary: Listagem de vagas
+      parameters:
+        - in: query
+          name: location
+          schema:
+            type: string
+        - in: query
+          name: q
+          schema:
+            type: string
+        - in: query
+          name: salary_min
+          schema:
+            type: number
+        - in: query
+          name: salary_max
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Lista de vagas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JobResponse"
+  /feedbacks:
+    post:
+      summary: Cadastro de feedback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackRequest"
+            example:
+              candidate_id: 1
+              partner_id: 1
+              message: "Ótima empresa!"
+      responses:
+        "201":
+          description: Feedback cadastrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+  /dashboard/counts:
+    get:
+      summary: Dashboard - contadores
+      responses:
+        "200":
+          description: Dados do dashboard
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pessoas_empregadas:
+                    type: integer
+                  empresas_parceiras:
+                    type: integer
+                  taxa_satisfacao:
+                    type: number
+                    format: float
+                    description: Porcentagem de satisfação
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        username:
+          type: string
+        password:
+          type: string
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        role:
+          type: string
+          enum: [admin, candidate, partner]
+        user:
+          type: object
+    CandidateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        phone:
+          type: string
+        city:
+          type: string
+        status:
+          type: string
+        area:
+          type: string
+        experience:
+          type: string
+        resume:
+          type: string
+          format: binary
+    CandidateResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        city:
+          type: string
+        status:
+          type: string
+        area:
+          type: string
+        experience:
+          type: string
+        resume:
+          type: string
+    PartnerRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        city:
+          type: string
+        email:
+          type: string
+        area:
+          type: string
+        password:
+          type: string
+    PartnerListResponse:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+    JobRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        partner_id:
+          type: integer
+        location:
+          type: string
+        salary:
+          type: number
+        type:
+          type: string
+        deadline:
+          type: string
+          format: date-time
+        description:
+          type: string
+        requirements:
+          type: string
+    JobResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        partner_id:
+          type: integer
+        location:
+          type: string
+        salary:
+          type: number
+        type:
+          type: string
+        deadline:
+          type: string
+          format: date-time
+        description:
+          type: string
+        requirements:
+          type: string
+    FeedbackRequest:
+      type: object
+      properties:
+        candidate_id:
+          type: integer
+        partner_id:
+          type: integer
+        message:
+          type: string

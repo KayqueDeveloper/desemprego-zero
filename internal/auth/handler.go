@@ -28,7 +28,7 @@ type LoginRequest struct {
 	Password string `json:"password" validate:"required,min=6"`
 }
 
-// Login autentica um administrador e retorna um token JWT
+// Login autentica admin, candidato ou empresa parceira e retorna um token JWT
 func (h *Handler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -36,20 +36,52 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	// Valida a estrutura
 	if err := validator.ValidaStruct(req); err != nil {
 		c.JSON(http.StatusBadRequest, validator.ErroValidacaoParaResponse(err))
 		return
 	}
 
+	var (
+		userID   uint
+		role     string
+		userData gin.H
+	)
+
+	// Tenta admin
 	var admin models.Admin
-	if err := h.db.Where("username = ?", req.Username).Or("email = ?", req.Email).First(&admin).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Credenciais inválidas"})
-		return
+	if err := h.db.Where("username = ?", req.Username).Or("email = ?", req.Email).First(&admin).Error; err == nil {
+		if bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(req.Password)) == nil {
+			userID = admin.ID
+			role = "admin"
+			userData = gin.H{"id": admin.ID, "username": admin.Username, "email": admin.Email}
+		}
 	}
 
-	// Verifica a senha
-	if err := bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(req.Password)); err != nil {
+	// Tenta candidate
+	if userID == 0 {
+		var candidate models.Candidate
+		if err := h.db.Where("email = ?", req.Email).First(&candidate).Error; err == nil {
+			if bcrypt.CompareHashAndPassword([]byte(candidate.Password), []byte(req.Password)) == nil {
+				userID = candidate.ID
+				role = "candidate"
+				userData = gin.H{"id": candidate.ID, "name": candidate.Name, "email": candidate.Email}
+			}
+		}
+	}
+
+	// Tenta partner
+	if userID == 0 {
+		var partner models.Partner
+		if err := h.db.Where("email = ?", req.Email).First(&partner).Error; err == nil {
+			if bcrypt.CompareHashAndPassword([]byte(partner.Password), []byte(req.Password)) == nil {
+				userID = partner.ID
+				role = "partner"
+				userData = gin.H{"id": partner.ID, "name": partner.Name, "email": partner.Email}
+			}
+		}
+	}
+
+	if userID == 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Credenciais inválidas"})
 		return
 	}
@@ -57,10 +89,11 @@ func (h *Handler) Login(c *gin.Context) {
 	// Gera o token JWT com expiração de 24 horas
 	expirationTime := time.Now().Add(24 * time.Hour)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"admin_id": admin.ID,
-		"exp":      expirationTime.Unix(),
-		"iat":      time.Now().Unix(),
-		"iss":      "desemprego-zero",
+		"user_id": userID,
+		"role":    role,
+		"exp":     expirationTime.Unix(),
+		"iat":     time.Now().Unix(),
+		"iss":     "desemprego-zero",
 	})
 
 	tokenString, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
@@ -72,11 +105,8 @@ func (h *Handler) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"token":      tokenString,
 		"expires_at": expirationTime,
-		"admin": gin.H{
-			"id":       admin.ID,
-			"username": admin.Username,
-			"email":    admin.Email,
-		},
+		"role":       role,
+		"user":       userData,
 	})
 }
 

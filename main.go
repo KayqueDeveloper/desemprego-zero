@@ -8,8 +8,11 @@ import (
 
 	"desemprego-zero/internal/auth"
 	"desemprego-zero/internal/candidate"
+	"desemprego-zero/internal/dashboard"
+	"desemprego-zero/internal/feedback"
 	"desemprego-zero/internal/job"
 	"desemprego-zero/internal/middleware"
+	"desemprego-zero/internal/partner"
 
 	"desemprego-zero/internal/models"
 
@@ -50,7 +53,8 @@ func main() {
 
 	// Configuração do banco de dados
 	dsn := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		// sslmode=disable
+		"host=%s port=%s user=%s password=%s dbname=%s",
 		os.Getenv("DB_HOST"),
 		os.Getenv("DB_PORT"),
 		os.Getenv("DB_USER"),
@@ -68,6 +72,8 @@ func main() {
 		&models.Job{},
 		&models.Candidate{},
 		&models.Admin{},
+		&models.Partner{},
+		&models.Feedback{},
 	)
 	if err != nil {
 		log.Fatalf("Erro ao migrar tabelas: %v", err)
@@ -81,7 +87,7 @@ func main() {
 	if allowedOrigin == "" {
 		allowedOrigin = "http://localhost:3000"
 	}
-	config.AllowOrigins = []string{allowedOrigin, "https://desemprego-zero", "http://localhost*"}
+	config.AllowOrigins = []string{allowedOrigin, "https://desemprego-zero", "http://localhost*, http://localhost:8080"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
 	config.AllowCredentials = true
@@ -104,6 +110,9 @@ func main() {
 	jobHandler := job.NewHandler(db)
 	candidateHandler := candidate.NewHandler(db)
 	authHandler := auth.NewHandler(db)
+	partnerHandler := partner.NewHandler(db)
+	feedbackHandler := feedback.NewHandler(db)
+	dashboardHandler := dashboard.NewHandler(db)
 
 	// Rotas públicas
 	public := r.Group("/")
@@ -111,7 +120,11 @@ func main() {
 		// Rotas de vagas
 		public.GET("/jobs", jobHandler.ListJobs)
 		public.GET("/jobs/:id", jobHandler.GetJob)
-		public.POST("/candidates", candidateHandler.CreateCandidate)
+		public.POST("/candidates", candidateHandler.CreateCandidate) // multipart/form-data
+		public.POST("/partners", partnerHandler.CreatePartner)
+		public.GET("/partners", partnerHandler.ListPartners)
+		public.POST("/feedbacks", feedbackHandler.CreateFeedback)
+		public.GET("/dashboard/counts", dashboardHandler.CountDashboard)
 	}
 
 	// Rotas protegidas (admin)
@@ -134,9 +147,9 @@ func main() {
 	}
 
 	// Inicia o servidor
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	r.Run(":" + port)
+	//	port := os.Getenv("PORT")
+	//	if port == "" {
+	//		port = "8080"
+	//	}
+	r.Run(":8080")
 }

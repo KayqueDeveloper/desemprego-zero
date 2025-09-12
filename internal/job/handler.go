@@ -1,10 +1,11 @@
 package job
 
 import (
-	"net/http"
-
 	"desemprego-zero/internal/models"
 	"desemprego-zero/internal/validator"
+	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -18,14 +19,33 @@ func NewHandler(db *gorm.DB) *Handler {
 	return &Handler{db: db}
 }
 
-// ListJobs retorna todas as vagas ativas
+// ListJobs retorna todas as vagas ativas com filtros
 func (h *Handler) ListJobs(c *gin.Context) {
 	var jobs []models.Job
-	result := h.db.Where("active = ?", true).Find(&jobs)
-	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao buscar vagas"})
-		return
+	location := c.Query("location")
+	titleOrCompany := c.Query("q")
+	salaryMin := c.Query("salary_min")
+	salaryMax := c.Query("salary_max")
+
+	dbQuery := h.db.Model(&models.Job{}).Where("active = ?", true)
+	if location != "" {
+		dbQuery = dbQuery.Where("location = ?", location)
 	}
+	if titleOrCompany != "" {
+		q := "%" + strings.ToLower(titleOrCompany) + "%"
+		dbQuery = dbQuery.Where("LOWER(title) LIKE ? OR LOWER(company) LIKE ?", q, q)
+	}
+	if salaryMin != "" {
+		if min, err := strconv.ParseFloat(salaryMin, 64); err == nil {
+			dbQuery = dbQuery.Where("salary >= ?", min)
+		}
+	}
+	if salaryMax != "" {
+		if max, err := strconv.ParseFloat(salaryMax, 64); err == nil {
+			dbQuery = dbQuery.Where("salary <= ?", max)
+		}
+	}
+	dbQuery.Find(&jobs)
 
 	c.JSON(http.StatusOK, jobs)
 }
@@ -52,11 +72,11 @@ func (h *Handler) CreateJob(c *gin.Context) {
 		return
 	}
 
-	// Valida a estrutura
-	if err := validator.ValidaStruct(job); err != nil {
-		c.JSON(http.StatusBadRequest, validator.ErroValidacaoParaResponse(err))
-		return
-	}
+	// // Valida a estrutura
+	// if err := validator.ValidaStruct(job); err != nil {
+	// 	c.JSON(http.StatusBadRequest, validator.ErroValidacaoParaResponse(err))
+	// 	return
+	// }
 
 	result := h.db.Create(&job)
 	if result.Error != nil {
