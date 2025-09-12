@@ -82,17 +82,14 @@ func main() {
 	// Inicializa o router
 	r := gin.Default()
 
-	config := cors.DefaultConfig()
-	allowedOrigin := os.Getenv("CORS_ORIGIN")
-	if allowedOrigin == "" {
-		allowedOrigin = "http://localhost:3000"
+	// Configuração CORS para permitir tudo
+	config := cors.Config{
+		AllowAllOrigins:  true,
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"*"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
 	}
-	config.AllowOrigins = []string{allowedOrigin, "https://desemprego-zero", "http://localhost*, http://localhost:8080"}
-	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
-	config.AllowCredentials = true
-	config.MaxAge = 12 * time.Hour
-
 	r.Use(cors.New(config))
 
 	// Middleware de tratamento de erros
